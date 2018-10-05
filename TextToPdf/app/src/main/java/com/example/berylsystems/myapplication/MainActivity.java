@@ -2,12 +2,15 @@ package com.example.berylsystems.myapplication;
 
 import android.Manifest;
 import android.app.AlertDialog;
+import android.app.ProgressDialog;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.net.Uri;
+import android.os.AsyncTask;
 import android.os.Build;
 import android.os.Environment;
+import android.support.annotation.RequiresApi;
 import android.support.v4.app.ActivityCompat;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
@@ -17,6 +20,10 @@ import android.widget.Button;
 import android.widget.EditText;
 import android.widget.Toast;
 
+import com.example.berylsystems.myapplication.pdf.GridViewActivity;
+import com.example.berylsystems.myapplication.pdf.Helper;
+import com.example.berylsystems.myapplication.pdf.PDFDoc;
+import com.example.berylsystems.myapplication.pdf.PDF_Activity;
 import com.itextpdf.text.Document;
 import com.itextpdf.text.DocumentException;
 import com.itextpdf.text.Paragraph;
@@ -36,12 +43,14 @@ public class MainActivity extends AppCompatActivity {
     private Button mCreateButton;
     private File pdfFile;
     final private int REQUEST_CODE_ASK_PERMISSIONS = 111;
+    ProgressDialog progressDialog;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-
+        Helper.initActionbar(this, getSupportActionBar(), "Text2Pdf", false);
+        progressDialog=new ProgressDialog(this);
         mContentEditText = (EditText) findViewById(R.id.edit_text_content);
         mCreateButton = (Button) findViewById(R.id.button_create);
         mCreateButton.setOnClickListener(new View.OnClickListener() {
@@ -53,10 +62,8 @@ public class MainActivity extends AppCompatActivity {
                     return;
                 }
                 try {
-                    createPdfWrapper();
-                } catch (FileNotFoundException e) {
-                    e.printStackTrace();
-                } catch (DocumentException e) {
+                    new MyAsync().execute();
+                } catch (Exception e) {
                     e.printStackTrace();
                 }
             }
@@ -98,10 +105,8 @@ public class MainActivity extends AppCompatActivity {
                 if (grantResults[0] == PackageManager.PERMISSION_GRANTED) {
                     // Permission Granted
                     try {
-                        createPdfWrapper();
-                    } catch (FileNotFoundException e) {
-                        e.printStackTrace();
-                    } catch (DocumentException e) {
+                       new MyAsync().execute();
+                    } catch (Exception e) {
                         e.printStackTrace();
                     }
                 } else {
@@ -137,11 +142,44 @@ public class MainActivity extends AppCompatActivity {
         PdfWriter.getInstance(document, output);
         document.open();
         document.add(new Paragraph(mContentEditText.getText().toString()));
-
         document.close();
-        previewPdf();
-
+//      previewPdf();
+        Intent i=new Intent(getApplicationContext(),PDF_Activity.class);
+        i.putExtra("PATH",getPDF().getPath());
+        startActivity(i);
+        overridePendingTransition(R.anim.slide_from_left, R.anim.slide_to_right);
     }
+
+
+    private PDFDoc getPDF() {
+        //TARGET FOLDER
+        File downloadsFolder = new File(Environment.getExternalStorageDirectory() + "/Documents");
+
+        PDFDoc pdfDoc = null;
+
+        if(downloadsFolder.exists())
+        {
+            //GET ALL FILES IN DOWNLOAD FOLDER
+            File[] files=downloadsFolder.listFiles();
+
+            //LOOP THRU THOSE FILES GETTING NAME AND URI
+            for (int i=0;i<files.length;i++)
+            {
+                File file=files[i];
+                if(file.getPath().endsWith("HelloWorld.pdf"))
+                {
+                    pdfDoc=new PDFDoc();
+                    pdfDoc.setName(file.getName());
+                    pdfDoc.setPath(file.getAbsolutePath());
+                }
+
+            }
+        }
+
+        return pdfDoc;
+    }
+
+
 
     private void previewPdf() {
 
@@ -154,10 +192,41 @@ public class MainActivity extends AppCompatActivity {
             intent.setAction(Intent.ACTION_VIEW);
             Uri uri = Uri.fromFile(pdfFile);
             intent.setDataAndType(uri, "application/pdf");
-
             startActivity(intent);
         }else{
             Toast.makeText(this,"Download a PDF Viewer to see the generated PDF",Toast.LENGTH_SHORT).show();
+        }
+    }
+
+
+
+    class MyAsync extends AsyncTask<Void, Void, String> {
+        @Override
+        protected void onPreExecute() {
+            super.onPreExecute();
+            progressDialog = new ProgressDialog(MainActivity.this);
+            progressDialog.setMessage("Please wait ...");
+            progressDialog.setCancelable(true);
+            progressDialog.show();
+        }
+
+        @RequiresApi(api = Build.VERSION_CODES.KITKAT)
+        @Override
+        protected String doInBackground(Void... params) {
+            try {
+                createPdfWrapper();
+            } catch (FileNotFoundException e) {
+                e.printStackTrace();
+            } catch (DocumentException e) {
+                e.printStackTrace();
+            }
+            return "";
+        }
+
+
+        @Override
+        protected void onPostExecute(String data) {
+            progressDialog.dismiss();
         }
     }
 
